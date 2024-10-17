@@ -1,20 +1,39 @@
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import React, { Suspense, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 
 // Component for rendering a 3D model
 const TestModel = ({ modelPath }) => {
-  const { scene } = useGLTF(modelPath); // Load model dynamically based on the passed path
+  const { scene, error } = useGLTF(modelPath); // Load model dynamically based on the passed path
+
+  useEffect(() => {
+    // This effect runs whenever the modelPath changes
+    console.log("Model path changed to:", modelPath);
+  }, [modelPath]);
+
+  if (error) {
+    console.error("Error loading model:", error);
+    return null; // Return null if there's an error loading the model
+  }
 
   return <primitive object={scene} />;
 };
+
+// Loading fallback component
+const Loading = () => (
+  <mesh>
+    <boxGeometry args={[1, 1, 1]} /> {/* Use boxGeometry instead of boxBufferGeometry */}
+    <meshStandardMaterial color={"orange"} />
+  </mesh>
+);
 
 // Main component
 const GridCanvas = () => {
   // List of 3D model paths
   const threeDModelsList = [
     { name: "Low Poly Dummy", path: "/low-poly_test_dummy.glb" },
-    { name: "Medieval Combat Dummy", path: "/medieval_combat_dummy.glb" }
+    { name: "Medieval Combat Dummy", path: "/medieval_combat_dummy.glb" },
+    { name: "Tunnergp", path: "/tunnergp.glb" },
   ];
 
   // State for currently selected model
@@ -22,7 +41,6 @@ const GridCanvas = () => {
 
   // Handle drag start
   const handleDragStart = (event, modelPath) => {
-    console.log("🚀 ~ handleDragStart ~ modelPath:", modelPath)
     event.dataTransfer.setData("modelPath", modelPath);
   };
 
@@ -30,9 +48,10 @@ const GridCanvas = () => {
   const handleDrop = (event) => {
     event.preventDefault();
     const modelPath = event.dataTransfer.getData("modelPath");
-    console.log("🚀 ~ handleDrop ~ modelPath:", modelPath)
     if (modelPath) {
       setCurrentModel(modelPath); // Update the state with the new model path
+      console.log("Current model updated to:", modelPath); // Log the updated model path
+      window.dispatchEvent(new Event('resize')); // Force canvas to resize
     }
   };
 
@@ -70,7 +89,7 @@ const GridCanvas = () => {
           camera={{ position: [0, 5, 10], fov: 75 }}
         >
           {/* Adding Suspense for lazy loading */}
-          <Suspense fallback={null}>
+          <Suspense fallback={<Loading />}>
             {/* Adding the grid helper */}
             <gridHelper args={[100, 20, "white", "white"]} />
             {/* Adding the axes helper for reference */}
