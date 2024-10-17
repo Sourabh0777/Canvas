@@ -1,23 +1,10 @@
-import { OrbitControls, useGLTF } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useState } from "react";
+import TestModel from "./TestModel";
 
 // Component for rendering a 3D model
-const TestModel = ({ modelPath }) => {
-  const { scene, error } = useGLTF(modelPath); // Load model dynamically based on the passed path
 
-  useEffect(() => {
-    // This effect runs whenever the modelPath changes
-    console.log("Model path changed to:", modelPath);
-  }, [modelPath]);
-
-  if (error) {
-    console.error("Error loading model:", error);
-    return null; // Return null if there's an error loading the model
-  }
-
-  return <primitive object={scene} />;
-};
 
 // Loading fallback component
 const Loading = () => (
