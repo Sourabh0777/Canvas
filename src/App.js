@@ -1,7 +1,14 @@
-import "./App.css";
+// src/App.js
+// import { Canvas } from "@react-three/fiber";
+import React from "react";
+import GridCanvas from "./components/GridCanvas";
 
-function App() {
-  return <div className="App">working</div>;
-}
+const App = () => {
+  return (
+    <div style={{ height: "100vh" }}>
+      <GridCanvas />
+    </div>
+  );
+};
 
 export default App;
