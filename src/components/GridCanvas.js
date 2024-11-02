@@ -18,14 +18,15 @@ const GridCanvas = () => {
     { name: "Low Poly Dummy", path: "/low-poly_test_dummy.glb" },
     { name: "Medieval Combat Dummy", path: "/medieval_combat_dummy.glb" },
     { name: "Tunnergp", path: "/tunnergp.glb" },
+    { name: "Shopping", path: "/tunnergp.glb" },
   ];
 
   const [currentModel, setCurrentModel] = useState("/low-poly_test_dummy.glb");
   const modelRef = useRef();
 
-  // Ref for depth rendering target
+  // Ref for depth rendering target (increased size for HD)
   const depthRenderTarget = useRef(
-    new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+    new THREE.WebGLRenderTarget(window.innerWidth * 2, window.innerHeight * 2, {
       format: THREE.RGBAFormat,
       type: THREE.UnsignedByteType,
     })
@@ -94,12 +95,25 @@ const CanvasContent = ({ currentModel, depthRenderTarget, setLogDepthMapRef }) =
   const { gl, scene, camera } = useThree();
 
   const handleGetDepthMap = () => {
-    // Render the scene to the depth render target
+    // Clear color and set depth material
     gl.setRenderTarget(depthRenderTarget.current);
+    gl.clearColor(1, 1, 1, 1); // Set to white for depth map
+    gl.clear();
+    
+    // Disable lights and shadows for depth map rendering
+    scene.traverse((child) => {
+      if (child.isMesh) {
+        child.material.depthWrite = true; // Ensure only depth is written
+        child.material.depthTest = true; // Ensure depth testing is enabled
+        child.material.visible = true; // Make sure mesh is visible
+        // Optionally, you can set other properties if needed
+        // e.g., child.material.transparent = false;
+      }
+    });
+    
     gl.render(scene, camera);
     gl.setRenderTarget(null);
 
-    // Extract depth data from the render target's texture
     const width = depthRenderTarget.current.width;
     const height = depthRenderTarget.current.height;
     const depthPixels = new Uint8Array(width * height * 4); // RGBA format
@@ -113,41 +127,52 @@ const CanvasContent = ({ currentModel, depthRenderTarget, setLogDepthMapRef }) =
       depthPixels
     );
 
-    // Create JSON depth map data
-    const depthData = [];
-    for (let i = 0; i < depthPixels.length; i += 4) {
-      // Extract grayscale depth value from the red channel
-      depthData.push(depthPixels[i] / 255); // Normalize between 0 and 1
+    // Flip the depth data vertically
+    const flippedDepthData = [];
+    for (let row = height - 1; row >= 0; row--) {
+      for (let col = 0; col < width; col++) {
+        const index = (row * width + col) * 4;
+        flippedDepthData.push(depthPixels[index] / 255); // Extract grayscale value
+      }
     }
 
-    const jsonData = JSON.stringify(depthData);
+    // Save flipped depth data as JSON
+    const jsonData = JSON.stringify(flippedDepthData);
     const jsonBlob = new Blob([jsonData], { type: "application/json" });
     const jsonURL = URL.createObjectURL(jsonBlob);
-
-    // Download JSON
     const jsonLink = document.createElement("a");
     jsonLink.href = jsonURL;
     jsonLink.download = "depth-map.json";
     jsonLink.click();
     URL.revokeObjectURL(jsonURL);
 
-    // Create a canvas to visualize the depth data
+    // Create canvas and flip image data for PNG
     const depthCanvas = document.createElement("canvas");
-    depthCanvas.width = width;
-    depthCanvas.height = height;
+    depthCanvas.width = width; // Ensure canvas is HD
+    depthCanvas.height = height; // Ensure canvas is HD
     const ctx = depthCanvas.getContext("2d");
     const imageData = ctx.createImageData(width, height);
 
-    for (let i = 0; i < depthPixels.length; i += 4) {
-      const depthValue = depthPixels[i]; // Red channel for grayscale depth
-      imageData.data[i] = depthValue;
-      imageData.data[i + 1] = depthValue;
-      imageData.data[i + 2] = depthValue;
-      imageData.data[i + 3] = 255; // Alpha channel
+    for (let row = 0; row < height; row++) {
+      for (let col = 0; col < width; col++) {
+        const srcIndex = ((height - row - 1) * width + col) * 4; // Flip vertically
+        const destIndex = (row * width + col) * 4;
+
+        // Remap depth value to a gradient (0-255)
+        const depthValue = depthPixels[srcIndex] / 255; // Normalize to [0, 1]
+        const gradientValue = Math.floor(depthValue * 255); // Scale to [0, 255]
+
+        // Set the color based on depth value for gradient visualization
+        imageData.data[destIndex] = gradientValue;     // Red channel
+        imageData.data[destIndex + 1] = gradientValue; // Green channel
+        imageData.data[destIndex + 2] = gradientValue; // Blue channel
+        imageData.data[destIndex + 3] = 255;           // Alpha channel
+      }
     }
+
     ctx.putImageData(imageData, 0, 0);
 
-    // Save the depth canvas as a PNG image
+    // Save depth canvas as PNG
     depthCanvas.toBlob((blob) => {
       const imageURL = URL.createObjectURL(blob);
       const imageLink = document.createElement("a");
@@ -219,10 +244,10 @@ const styles = {
   button: {
     marginTop: "20px",
     padding: "10px",
-    backgroundColor: "#555",
-    color: "#fff",
+    backgroundColor: "#008CBA",
+    color: "white",
+    border: "none",
     borderRadius: "5px",
-    textAlign: "center",
     cursor: "pointer",
   },
 };
