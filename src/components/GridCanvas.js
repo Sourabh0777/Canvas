@@ -93,31 +93,42 @@ const GridCanvas = () => {
 // Canvas Content Component
 const CanvasContent = ({ currentModel, depthRenderTarget, setLogDepthMapRef }) => {
   const { gl, scene, camera } = useThree();
-
+  
   const handleGetDepthMap = () => {
-    // Clear color and set depth material
-    gl.setRenderTarget(depthRenderTarget.current);
-    gl.clearColor(1, 1, 1, 1); // Set to white for depth map
-    gl.clear();
+    // Create a custom depth material to render the model in white
+    const depthMaterial = new THREE.MeshDepthMaterial();
+    depthMaterial.color = new THREE.Color(1, 1, 1); // White for the model
     
-    // Disable lights and shadows for depth map rendering
+    // Store original materials, apply depth material to only model meshes, and disable shadows
+    const originalMaterials = {};
     scene.traverse((child) => {
       if (child.isMesh) {
-        child.material.depthWrite = true; // Ensure only depth is written
-        child.material.depthTest = true; // Ensure depth testing is enabled
-        child.material.visible = true; // Make sure mesh is visible
-        // Optionally, you can set other properties if needed
-        // e.g., child.material.transparent = false;
+        originalMaterials[child.uuid] = child.material; // Store original material
+        child.material = depthMaterial; // Apply depth material with white color
+        child.castShadow = false; // Disable shadow casting
+        child.receiveShadow = false; // Disable shadow receiving
       }
     });
-    
+  
+    // Render with a black background
+    gl.setRenderTarget(depthRenderTarget.current);
+    gl.clearColor(0, 0, 0, 1); // Set black background color
+    gl.clear();
     gl.render(scene, camera);
     gl.setRenderTarget(null);
-
+  
+    // Restore original materials after rendering
+    scene.traverse((child) => {
+      if (child.isMesh) {
+        child.material = originalMaterials[child.uuid];
+      }
+    });
+  
     const width = depthRenderTarget.current.width;
     const height = depthRenderTarget.current.height;
     const depthPixels = new Uint8Array(width * height * 4); // RGBA format
-
+  
+    // Read pixel data
     gl.readRenderTargetPixels(
       depthRenderTarget.current,
       0,
@@ -126,16 +137,16 @@ const CanvasContent = ({ currentModel, depthRenderTarget, setLogDepthMapRef }) =
       height,
       depthPixels
     );
-
-    // Flip the depth data vertically
+  
+    // Flip depth data vertically for JSON output
     const flippedDepthData = [];
     for (let row = height - 1; row >= 0; row--) {
       for (let col = 0; col < width; col++) {
         const index = (row * width + col) * 4;
-        flippedDepthData.push(depthPixels[index] / 255); // Extract grayscale value
+        flippedDepthData.push(depthPixels[index] / 255); // Normalize depth to [0, 1]
       }
     }
-
+  
     // Save flipped depth data as JSON
     const jsonData = JSON.stringify(flippedDepthData);
     const jsonBlob = new Blob([jsonData], { type: "application/json" });
@@ -145,34 +156,34 @@ const CanvasContent = ({ currentModel, depthRenderTarget, setLogDepthMapRef }) =
     jsonLink.download = "depth-map.json";
     jsonLink.click();
     URL.revokeObjectURL(jsonURL);
-
+  
     // Create canvas and flip image data for PNG
     const depthCanvas = document.createElement("canvas");
-    depthCanvas.width = width; // Ensure canvas is HD
-    depthCanvas.height = height; // Ensure canvas is HD
+    depthCanvas.width = width;
+    depthCanvas.height = height;
     const ctx = depthCanvas.getContext("2d");
     const imageData = ctx.createImageData(width, height);
-
+  
     for (let row = 0; row < height; row++) {
       for (let col = 0; col < width; col++) {
-        const srcIndex = ((height - row - 1) * width + col) * 4; // Flip vertically
+        const srcIndex = ((height - row - 1) * width + col) * 4;
         const destIndex = (row * width + col) * 4;
-
-        // Remap depth value to a gradient (0-255)
+  
+        // White for model depth; black for background
         const depthValue = depthPixels[srcIndex] / 255; // Normalize to [0, 1]
-        const gradientValue = Math.floor(depthValue * 255); // Scale to [0, 255]
-
-        // Set the color based on depth value for gradient visualization
-        imageData.data[destIndex] = gradientValue;     // Red channel
-        imageData.data[destIndex + 1] = gradientValue; // Green channel
-        imageData.data[destIndex + 2] = gradientValue; // Blue channel
-        imageData.data[destIndex + 3] = 255;           // Alpha channel
+        const gradientValue = depthValue > 0 ? 255 : 0; // Set model to white, background to black
+  
+        // Set the color for depth map with black background and white model
+        imageData.data[destIndex] = gradientValue;
+        imageData.data[destIndex + 1] = gradientValue;
+        imageData.data[destIndex + 2] = gradientValue;
+        imageData.data[destIndex + 3] = 255; // Alpha channel
       }
     }
-
+  
     ctx.putImageData(imageData, 0, 0);
-
-    // Save depth canvas as PNG
+  
+    // Save canvas as PNG
     depthCanvas.toBlob((blob) => {
       const imageURL = URL.createObjectURL(blob);
       const imageLink = document.createElement("a");
@@ -182,7 +193,7 @@ const CanvasContent = ({ currentModel, depthRenderTarget, setLogDepthMapRef }) =
       URL.revokeObjectURL(imageURL);
     });
   };
-
+  
   React.useEffect(() => {
     setLogDepthMapRef(handleGetDepthMap);
   }, [setLogDepthMapRef]);
